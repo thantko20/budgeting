@@ -1,52 +1,39 @@
 # budgeting
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Start, and more.
+A small monthly budget. Transactions are stored as integer minor units, dated as civil dates, and totaled for the month in Asia/Yangon. The default currency is MMK (one stored unit is one kyat).
 
-## Features
+## Stack
 
-- **TypeScript** - For type safety and improved developer experience
-- **TanStack Start** - SSR framework with TanStack Router
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **shadcn/ui** - Reusable UI components
-- **Starlight** - Documentation site with Astro
-- **Turborepo** - Optimized monorepo build system
-- **Biome** - Linting and formatting
-- **Husky** - Git hooks for code quality
+- TanStack Start, React, and Tailwind in `apps/web`
+- Shared ledger and Postgres-dialect SQL in `packages/ledger`
+- Local database is [PGlite](https://pglite.dev) (Postgres in WASM) in `apps/web/data`, so nothing else has to be installed. The same SQL can move to hosted Postgres on Render later.
+- `apps/docs` is the original Starlight starter and is not part of `bun dev`, `bun run build`, `bun run test`, or `bun run check-types`.
 
-## Getting Started
+## Requirements
 
-First, install the dependencies:
+Node.js 24. The repo pins that in `.nvmrc` and `package.json` `engines`. Dependencies install with Bun 1.2.18.
+
+## Run locally
 
 ```bash
 bun install
-```
-
-
-Then, run the development server:
-
-```bash
 bun dev
 ```
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the web application.
+Open http://localhost:3001. The first launch creates `apps/web/data` and seeds a Cash account (MMK) plus a few categories.
 
+Other checks:
 
-
-## Project Structure
-
-```
-budgeting/
-├── apps/
-│   ├── web/         # Frontend application (React + TanStack Start)
-│   ├── docs/        # Documentation site (Astro Starlight)
+```bash
+bun run check
+bun run check-types
+bun run test
+bun run build
 ```
 
-## Available Scripts
+Production preview, after a build:
 
-- `bun dev`: Start all applications in development mode
-- `bun build`: Build all applications
-- `bun dev:web`: Start only the web application
-- `bun check-types`: Check TypeScript types across all apps
-- `bun check`: Run Biome formatting and linting
-- `cd apps/docs && bun dev`: Start documentation site
-- `cd apps/docs && bun build`: Build documentation site
+```bash
+bun run build
+bun run --filter web start
+```

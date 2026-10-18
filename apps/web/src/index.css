@@ -5,17 +5,16 @@
 
 @theme {
 	--font-sans:
-		"Inter", "Geist", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
-		"Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+		ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+		"Segoe UI Symbol", "Noto Color Emoji";
 }
 
-html,
-body {
-	@apply bg-white dark:bg-gray-950;
+html {
+	color-scheme: light;
+}
 
-	@media (prefers-color-scheme: dark) {
-		color-scheme: dark;
-	}
+html.dark {
+	color-scheme: dark;
 }
 
 :root {
