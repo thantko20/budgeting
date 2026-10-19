@@ -18,6 +18,14 @@ export const CURRENCY_EXPONENTS = {
 
 export type CurrencyCode = keyof typeof CURRENCY_EXPONENTS;
 
+export const CURRENCY_CODES = [
+	"MMK",
+	"USD",
+	"EUR",
+	"JPY",
+	"BHD",
+] as const satisfies readonly CurrencyCode[];
+
 export const DEFAULT_CURRENCY: CurrencyCode = "MMK";
 
 export class MoneyParseError extends Error {
@@ -81,6 +89,25 @@ export function parseDecimalToMinor(
 
 	const signed = sign === "-" ? -minor : minor;
 	return Number(signed);
+}
+
+export function minorToDecimalInput(
+	amountMinor: number,
+	currency: CurrencyCode,
+): string {
+	if (!Number.isSafeInteger(amountMinor)) {
+		throw new MoneyParseError("Amount is not a safe integer minor unit.");
+	}
+	const exponent = CURRENCY_EXPONENTS[currency];
+	const negative = amountMinor < 0;
+	const abs = Math.abs(amountMinor);
+	if (exponent === 0) {
+		return `${negative ? "-" : ""}${abs}`;
+	}
+	const digits = String(abs).padStart(exponent + 1, "0");
+	const whole = digits.slice(0, -exponent);
+	const fraction = digits.slice(-exponent);
+	return `${negative ? "-" : ""}${whole}.${fraction}`;
 }
 
 export function formatMinor(

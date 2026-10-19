@@ -10,13 +10,19 @@ export default function Header() {
 	return (
 		<header className="border-b">
 			<div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3">
-				<nav aria-label="Primary">
+				<nav aria-label="Primary" className="flex items-center gap-4">
 					<Link
 						to="/"
-						search={{ month: currentMonth(DEFAULT_TIME_ZONE) }}
+						search={{
+							month: currentMonth(DEFAULT_TIME_ZONE),
+							account: undefined,
+						}}
 						className="font-semibold text-lg"
 					>
 						Budget
+					</Link>
+					<Link to="/accounts" className="text-sm">
+						Accounts
 					</Link>
 				</nav>
 				<div className="flex items-center gap-3">

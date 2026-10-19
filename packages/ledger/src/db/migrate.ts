@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { PGlite } from "@electric-sql/pglite";
 
-const MIGRATION_ID = "0000_init";
+const MIGRATIONS = ["0000_init", "0001_accounts"] as const;
 
 export async function applyMigrations(client: PGlite): Promise<void> {
 	await client.exec(`
@@ -12,25 +12,26 @@ export async function applyMigrations(client: PGlite): Promise<void> {
 			applied_at timestamptz NOT NULL DEFAULT now()
 		);
 	`);
-	const existing = await client.query<{ id: string }>(
-		"SELECT id FROM schema_migrations WHERE id = $1",
-		[MIGRATION_ID],
-	);
-	if (existing.rows.length > 0) {
-		return;
+	for (const id of MIGRATIONS) {
+		const existing = await client.query<{ id: string }>(
+			"SELECT id FROM schema_migrations WHERE id = $1",
+			[id],
+		);
+		if (existing.rows.length > 0) {
+			continue;
+		}
+		await client.exec(readMigrationSql(id));
+		await client.query("INSERT INTO schema_migrations (id) VALUES ($1)", [id]);
 	}
-	await client.exec(readMigrationSql());
-	await client.query("INSERT INTO schema_migrations (id) VALUES ($1)", [
-		MIGRATION_ID,
-	]);
 }
 
-function readMigrationSql(): string {
+function readMigrationSql(id: string): string {
+	const fileName = `${id}.sql`;
 	const here = dirname(fileURLToPath(import.meta.url));
 	const candidates = [
-		join(here, "../../drizzle/0000_init.sql"),
-		join(process.cwd(), "packages/ledger/drizzle/0000_init.sql"),
-		join(process.cwd(), "../../packages/ledger/drizzle/0000_init.sql"),
+		join(here, "../../drizzle", fileName),
+		join(process.cwd(), "packages/ledger/drizzle", fileName),
+		join(process.cwd(), "../../packages/ledger/drizzle", fileName),
 	];
 	for (const candidate of candidates) {
 		if (existsSync(candidate)) {
@@ -38,6 +39,6 @@ function readMigrationSql(): string {
 		}
 	}
 	throw new Error(
-		"Could not find packages/ledger/drizzle/0000_init.sql. Run the server with the repo as the working directory, or from apps/web.",
+		`Could not find packages/ledger/drizzle/${fileName}. Run the server with the repo as the working directory, or from apps/web.`,
 	);
 }

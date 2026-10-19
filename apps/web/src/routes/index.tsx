@@ -3,38 +3,46 @@ import {
 	civilDateInTimeZone,
 	currentMonth,
 	DEFAULT_TIME_ZONE,
-	formatMinor,
 	formatMonthLabel,
-	isCurrencyCode,
 	isValidMonth,
 	shiftMonth,
 } from "@budgeting/ledger";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { TransactionForm } from "@/components/transaction-form";
+import { TransferForm } from "@/components/transfer-form";
+import { formatAmount } from "@/lib/format-amount";
 import { monthQuery } from "@/lib/month-query";
 
 export const Route = createFileRoute("/")({
 	validateSearch: (search: Record<string, unknown>) => {
-		const month = search.month;
-		if (typeof month === "string" && isValidMonth(month)) {
-			return { month };
-		}
-		return { month: currentMonth(DEFAULT_TIME_ZONE) };
+		const month =
+			typeof search.month === "string" && isValidMonth(search.month)
+				? search.month
+				: currentMonth(DEFAULT_TIME_ZONE);
+		const account =
+			typeof search.account === "string" && search.account.trim().length > 0
+				? search.account.trim()
+				: undefined;
+		return { month, account };
 	},
-	loaderDeps: ({ search }) => ({ month: search.month }),
+	loaderDeps: ({ search }) => ({
+		month: search.month,
+		account: search.account,
+	}),
 	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(monthQuery(deps.month)),
+		context.queryClient.ensureQueryData(monthQuery(deps.month, deps.account)),
 	component: MonthPage,
 });
 
 function MonthPage() {
-	const { month } = Route.useSearch();
+	const { month, account } = Route.useSearch();
 	const { data, isFetching, isError, error } = useQuery({
-		...monthQuery(month),
+		...monthQuery(month, account),
 		placeholderData: keepPreviousData,
 	});
 	const today = civilDateInTimeZone(new Date(), DEFAULT_TIME_ZONE);
+	const rows = data ? activityRows(data) : [];
 
 	return (
 		<main className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-6">
@@ -48,14 +56,14 @@ function MonthPage() {
 				<nav aria-label="Choose month" className="flex gap-2">
 					<Link
 						to="/"
-						search={{ month: shiftMonth(month, -1) }}
+						search={{ month: shiftMonth(month, -1), account }}
 						className="rounded-md border px-3 py-2 text-sm"
 					>
 						Previous month
 					</Link>
 					<Link
 						to="/"
-						search={{ month: shiftMonth(month, 1) }}
+						search={{ month: shiftMonth(month, 1), account }}
 						className="rounded-md border px-3 py-2 text-sm"
 					>
 						Next month
@@ -73,10 +81,32 @@ function MonthPage() {
 
 			{data ? (
 				<>
+					<nav aria-label="Filter by account" className="flex flex-wrap gap-2">
+						<AccountFilter
+							month={month}
+							label="All accounts"
+							current={account}
+						/>
+						{data.accounts.map((item) => (
+							<AccountFilter
+								key={item.id}
+								month={month}
+								accountId={item.id}
+								label={item.archived ? `${item.name} (archived)` : item.name}
+								current={account}
+							/>
+						))}
+					</nav>
+
 					<section aria-labelledby="totals-heading" className="grid gap-3">
 						<h2 id="totals-heading" className="font-medium text-lg">
 							Totals
 						</h2>
+						{data.transfers.length > 0 ? (
+							<p className="text-muted-foreground text-sm">
+								Transfers between accounts are not included in these totals.
+							</p>
+						) : null}
 						<div className="grid gap-3 sm:grid-cols-3">
 							{data.summaries.map((summary) => (
 								<div key={summary.currency} className="contents">
@@ -129,10 +159,22 @@ function MonthPage() {
 							Add a transaction
 						</h2>
 						<TransactionForm
-							key={month}
+							key={`${month}-${account ?? "all"}`}
 							today={civilDateInMonth(today, month) ? today : data.start}
 							accounts={data.accounts}
 							categories={data.categories}
+							accountId={account}
+						/>
+					</section>
+
+					<section aria-labelledby="transfer-heading" className="grid gap-3">
+						<h2 id="transfer-heading" className="font-medium text-lg">
+							Add a transfer
+						</h2>
+						<TransferForm
+							key={`transfer-${month}`}
+							today={civilDateInMonth(today, month) ? today : data.start}
+							accounts={data.accounts}
 						/>
 					</section>
 
@@ -143,7 +185,7 @@ function MonthPage() {
 						<h2 id="transactions-heading" className="font-medium text-lg">
 							Transactions
 						</h2>
-						{data.transactions.length === 0 ? (
+						{rows.length === 0 ? (
 							<p className="text-muted-foreground">
 								No transactions this month.
 							</p>
@@ -162,6 +204,9 @@ function MonthPage() {
 												Payee
 											</th>
 											<th scope="col" className="px-3 py-2 font-medium">
+												Account
+											</th>
+											<th scope="col" className="px-3 py-2 font-medium">
 												Category
 											</th>
 											<th scope="col" className="px-3 py-2 font-medium">
@@ -176,29 +221,22 @@ function MonthPage() {
 										</tr>
 									</thead>
 									<tbody>
-										{data.transactions.map((transaction) => (
-											<tr
-												key={transaction.id}
-												className="border-b last:border-0"
-											>
+										{rows.map((row) => (
+											<tr key={row.id} className="border-b last:border-0">
 												<td className="whitespace-nowrap px-3 py-2">
-													{transaction.occurredOn}
+													{row.occurredOn}
 												</td>
-												<td className="px-3 py-2">{transaction.payee}</td>
+												<td className="px-3 py-2">{row.title}</td>
+												<td className="px-3 py-2">{row.account}</td>
+												<td className="px-3 py-2">{row.category}</td>
 												<td className="px-3 py-2">
-													{transaction.categoryName}
-												</td>
-												<td className="px-3 py-2 capitalize">
-													{transaction.direction}
-													{transaction.amountMinor < 0 ? (
+													{row.kind}
+													{row.refund ? (
 														<span className="sr-only"> refund</span>
 													) : null}
 												</td>
 												<td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
-													{formatAmount(
-														transaction.amountMinor,
-														transaction.currency,
-													)}
+													{formatAmount(row.amountMinor, row.currency)}
 												</td>
 											</tr>
 										))}
@@ -222,9 +260,81 @@ function Total({ label, value }: { label: string; value: string }) {
 	);
 }
 
-function formatAmount(amountMinor: number, currency: string): string {
-	if (!isCurrencyCode(currency)) {
-		return String(amountMinor);
-	}
-	return formatMinor(amountMinor, currency);
+function AccountFilter({
+	month,
+	accountId,
+	label,
+	current,
+}: {
+	month: string;
+	accountId?: string;
+	label: string;
+	current?: string;
+}) {
+	const selected = (current ?? undefined) === accountId;
+	return (
+		<Link
+			to="/"
+			search={{ month, account: accountId }}
+			aria-current={selected ? "page" : undefined}
+			className={`rounded-md border px-3 py-1.5 text-sm ${selected ? "font-semibold" : ""}`}
+		>
+			{label}
+		</Link>
+	);
+}
+
+function activityRows(data: {
+	transactions: Array<{
+		id: string;
+		occurredOn: string;
+		createdAt: string;
+		payee: string;
+		direction: string;
+		amountMinor: number;
+		categoryName: string;
+		accountName: string;
+		currency: string;
+	}>;
+	transfers: Array<{
+		id: string;
+		occurredOn: string;
+		createdAt: string;
+		memo: string;
+		amountMinor: number;
+		currency: string;
+		fromAccountName: string;
+		toAccountName: string;
+	}>;
+}) {
+	return [
+		...data.transactions.map((transaction) => ({
+			id: transaction.id,
+			occurredOn: transaction.occurredOn,
+			createdAt: transaction.createdAt,
+			title: transaction.payee,
+			account: transaction.accountName,
+			category: transaction.categoryName,
+			kind: transaction.direction === "income" ? "Income" : "Expense",
+			amountMinor: transaction.amountMinor,
+			currency: transaction.currency,
+			refund: transaction.amountMinor < 0,
+		})),
+		...data.transfers.map((transfer) => ({
+			id: transfer.id,
+			occurredOn: transfer.occurredOn,
+			createdAt: transfer.createdAt,
+			title: transfer.memo,
+			account: `${transfer.fromAccountName} to ${transfer.toAccountName}`,
+			category: "Transfer",
+			kind: "Transfer",
+			amountMinor: transfer.amountMinor,
+			currency: transfer.currency,
+			refund: false,
+		})),
+	].sort(
+		(left, right) =>
+			right.occurredOn.localeCompare(left.occurredOn) ||
+			right.createdAt.localeCompare(left.createdAt),
+	);
 }

@@ -19,7 +19,10 @@ export async function seedIfEmpty(db: BudgetDatabase): Promise<void> {
 		id: SEED_ACCOUNT_ID,
 		ownerId: LOCAL_OWNER_ID,
 		name: "Cash",
+		type: "cash",
 		currency: DEFAULT_CURRENCY,
+		openingBalanceMinor: 0,
+		archived: false,
 		createdAt,
 	});
 	await db.insert(categories).values(

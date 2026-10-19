@@ -1,3 +1,3 @@
-import { accounts, categories, transactions } from "./schema";
+import { accounts, categories, transactions, transfers } from "./schema";
 
-export const schema = { accounts, categories, transactions };
+export const schema = { accounts, categories, transactions, transfers };

@@ -1,30 +1,51 @@
-import { createTransactionSchema, type Direction } from "@budgeting/ledger";
+import {
+	ACCOUNT_TYPE_LABELS,
+	type AccountType,
+	createTransactionSchema,
+	type Direction,
+} from "@budgeting/ledger";
 import { useForm } from "@tanstack/react-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { FieldError } from "@/components/field-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createTransaction } from "@/server/budget";
 
+const selectClass = "h-9 rounded-md border bg-transparent px-3 text-sm";
+
 export function TransactionForm({
 	today,
 	accounts,
 	categories,
+	accountId,
 }: {
 	today: string;
-	accounts: Array<{ id: string; name: string; currency: string }>;
+	accounts: Array<{
+		id: string;
+		name: string;
+		type: AccountType;
+		currency: string;
+		archived: boolean;
+	}>;
 	categories: Array<{ id: string; name: string; direction: Direction }>;
+	accountId?: string;
 }) {
 	const queryClient = useQueryClient();
 	const [formError, setFormError] = useState<string | null>(null);
+	const active = accounts.filter((account) => !account.archived);
 	const expenseCategory =
 		categories.find((category) => category.direction === "expense") ??
 		categories[0];
+	const initialAccount =
+		active.find((account) => account.id === accountId)?.id ??
+		active[0]?.id ??
+		"";
 
 	const form = useForm({
 		defaultValues: {
-			accountId: accounts[0]?.id ?? "",
+			accountId: initialAccount,
 			categoryId: expenseCategory?.id ?? "",
 			direction: "expense" as Direction,
 			amount: "",
@@ -44,11 +65,16 @@ export function TransactionForm({
 			form.setFieldValue("amount", "");
 			form.setFieldValue("payee", "");
 			await queryClient.invalidateQueries({ queryKey: ["month"] });
+			await queryClient.invalidateQueries({ queryKey: ["accounts"] });
 		},
 	});
 
-	if (accounts.length === 0 || categories.length === 0) {
-		return <p>No accounts are available yet.</p>;
+	if (active.length === 0 || categories.length === 0) {
+		return (
+			<p>
+				No accounts are available yet. Restore an archived account or add one.
+			</p>
+		);
 	}
 
 	return (
@@ -68,7 +94,7 @@ export function TransactionForm({
 							<select
 								id={field.name}
 								name={field.name}
-								className="h-9 rounded-md border bg-transparent px-3 text-sm"
+								className={selectClass}
 								value={field.state.value}
 								onBlur={field.handleBlur}
 								onChange={(event) => {
@@ -105,7 +131,7 @@ export function TransactionForm({
 									<select
 										id={field.name}
 										name={field.name}
-										className="h-9 rounded-md border bg-transparent px-3 text-sm"
+										className={selectClass}
 										value={field.state.value}
 										onBlur={field.handleBlur}
 										onChange={(event) => field.handleChange(event.target.value)}
@@ -215,14 +241,15 @@ export function TransactionForm({
 							<select
 								id={field.name}
 								name={field.name}
-								className="h-9 rounded-md border bg-transparent px-3 text-sm"
+								className={selectClass}
 								value={field.state.value}
 								onBlur={field.handleBlur}
 								onChange={(event) => field.handleChange(event.target.value)}
 							>
-								{accounts.map((account) => (
+								{active.map((account) => (
 									<option key={account.id} value={account.id}>
-										{account.name} ({account.currency})
+										{account.name} · {ACCOUNT_TYPE_LABELS[account.type]} (
+										{account.currency})
 									</option>
 								))}
 							</select>
@@ -246,36 +273,4 @@ export function TransactionForm({
 			</form.Subscribe>
 		</form>
 	);
-}
-
-function FieldError({
-	id,
-	errors,
-}: {
-	id: string;
-	errors: ReadonlyArray<unknown>;
-}) {
-	const message = messageFrom(errors);
-	if (!message) {
-		return null;
-	}
-	return (
-		<p id={id} role="alert" className="text-destructive text-sm">
-			{message}
-		</p>
-	);
-}
-
-function messageFrom(errors: ReadonlyArray<unknown>): string | undefined {
-	const first = errors[0];
-	if (typeof first === "string") {
-		return first;
-	}
-	if (first && typeof first === "object" && "message" in first) {
-		const message = first.message;
-		if (typeof message === "string") {
-			return message;
-		}
-	}
-	return undefined;
 }

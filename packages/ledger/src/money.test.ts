@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	formatMinor,
 	MoneyParseError,
+	minorToDecimalInput,
 	minorUnitExponent,
 	parseDecimalToMinor,
 } from "./money";
@@ -56,6 +57,23 @@ describe("formatMinor", () => {
 	it("keeps the sign on refunds", () => {
 		expect(normalize(formatMinor(-500, "MMK"))).toBe("-MMK 500");
 		expect(normalize(formatMinor(-1050, "USD"))).toBe("-$10.50");
+	});
+});
+
+describe("minorToDecimalInput", () => {
+	it("round-trips through parseDecimalToMinor", () => {
+		for (const [currency, amount] of [
+			["MMK", 1500],
+			["MMK", 0],
+			["USD", 1050],
+			["USD", 50],
+			["BHD", 1234],
+			["MMK", -500],
+		] as const) {
+			expect(
+				parseDecimalToMinor(minorToDecimalInput(amount, currency), currency),
+			).toBe(amount);
+		}
 	});
 });
 

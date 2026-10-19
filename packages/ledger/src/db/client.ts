@@ -39,5 +39,14 @@ async function openFileDatabase(): Promise<BudgetDatabase> {
 	return openBudgetDatabase(client);
 }
 
-export type { MonthSnapshot } from "./queries";
-export { getMonthSnapshot, insertTransaction, LedgerError } from "./queries";
+export type { AccountsSnapshot, MonthSnapshot } from "./queries";
+export {
+	getAccountSnapshot,
+	getMonthSnapshot,
+	insertAccount,
+	insertTransaction,
+	insertTransfer,
+	LedgerError,
+	setAccountArchived,
+	updateAccount,
+} from "./queries";
