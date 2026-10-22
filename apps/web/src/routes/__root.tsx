@@ -6,9 +6,9 @@ import {
 	Scripts,
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
+import { AppShell } from "@/components/app-shell";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import Header from "../components/header";
 import appCss from "../index.css?url";
 
 export interface RouterAppContext {
@@ -47,10 +47,9 @@ function RootDocument() {
 			</head>
 			<body>
 				<ThemeProvider>
-					<div className="grid min-h-svh grid-rows-[auto_1fr]">
-						<Header />
+					<AppShell>
 						<Outlet />
-					</div>
+					</AppShell>
 					<Toaster richColors />
 				</ThemeProvider>
 				<TanStackRouterDevtools position="bottom-left" />

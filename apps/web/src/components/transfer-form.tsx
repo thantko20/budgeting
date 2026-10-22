@@ -25,9 +25,11 @@ type AccountOption = {
 export function TransferForm({
 	today,
 	accounts,
+	onSaved,
 }: {
 	today: string;
 	accounts: AccountOption[];
+	onSaved?: () => void;
 }) {
 	const queryClient = useQueryClient();
 	const [formError, setFormError] = useState<string | null>(null);
@@ -70,6 +72,8 @@ export function TransferForm({
 			form.setFieldValue("memo", "");
 			await queryClient.invalidateQueries({ queryKey: ["month"] });
 			await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+			await queryClient.invalidateQueries({ queryKey: ["trend"] });
+			onSaved?.();
 		},
 	});
 

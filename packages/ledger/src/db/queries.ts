@@ -6,7 +6,7 @@ import {
 	type CurrencyNetWorth,
 	netWorthByCurrency,
 } from "../accounts";
-import { civilDateInMonth, monthBounds } from "../dates";
+import { civilDateInMonth, monthBounds, shiftMonth } from "../dates";
 import { LOCAL_OWNER_ID, SEED_ACCOUNT_ID } from "../ids";
 import {
 	type CurrencyCode,
@@ -26,6 +26,7 @@ import type {
 } from "../schema";
 import { isAccountType } from "../schema";
 import { type CurrencySummary, summarizeByCurrency } from "../summary";
+import { monthlyTrend, type TrendPoint } from "../trend";
 import { accounts, categories, transactions, transfers } from "./schema";
 import type { BudgetDatabase } from "./types";
 
@@ -508,6 +509,50 @@ function toAccountRecord(account: {
 		currency: account.currency,
 		archived: account.archived,
 	};
+}
+
+export async function getMonthlyTrend(
+	db: BudgetDatabase,
+	endMonth: string,
+	currency: CurrencyCode,
+	count = 6,
+): Promise<TrendPoint[]> {
+	const startMonth = shiftMonth(endMonth, -(count - 1));
+	const rows = await db
+		.select({
+			occurredOn: transactions.occurredOn,
+			direction: transactions.direction,
+			amountMinor: transactions.amountMinor,
+			currency: accounts.currency,
+		})
+		.from(transactions)
+		.innerJoin(accounts, eq(transactions.accountId, accounts.id))
+		.where(
+			and(
+				eq(transactions.ownerId, LOCAL_OWNER_ID),
+				gte(transactions.occurredOn, monthBounds(startMonth).start),
+				lte(transactions.occurredOn, monthBounds(endMonth).end),
+			),
+		);
+
+	return monthlyTrend({
+		endMonth,
+		count,
+		currency,
+		rows: rows.flatMap((row) => {
+			if (!isCurrencyCode(row.currency)) {
+				return [];
+			}
+			return [
+				{
+					occurredOn: row.occurredOn,
+					direction: row.direction as Direction,
+					amountMinor: row.amountMinor,
+					currency: row.currency,
+				},
+			];
+		}),
+	});
 }
 
 function parseOpening(input: string, currency: CurrencyCode): number {

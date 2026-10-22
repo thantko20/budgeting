@@ -1,340 +1,241 @@
 import {
-	civilDateInMonth,
-	civilDateInTimeZone,
-	currentMonth,
-	DEFAULT_TIME_ZONE,
+	ACCOUNT_TYPE_LABELS,
+	DEFAULT_CURRENCY,
 	formatMonthLabel,
-	isValidMonth,
-	shiftMonth,
+	isCurrencyCode,
 } from "@budgeting/ledger";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { TransactionForm } from "@/components/transaction-form";
-import { TransferForm } from "@/components/transfer-form";
+import { AccountIcon } from "@/components/account-icon";
+import { ActivityList } from "@/components/activity-list";
+import { SpendingChart, TrendChart } from "@/components/charts";
+import { accountsQuery } from "@/lib/accounts-query";
+import { buildActivity } from "@/lib/activity";
 import { formatAmount } from "@/lib/format-amount";
 import { monthQuery } from "@/lib/month-query";
+import { readMonth } from "@/lib/search";
+import { trendQuery } from "@/lib/trend-query";
 
 export const Route = createFileRoute("/")({
-	validateSearch: (search: Record<string, unknown>) => {
-		const month =
-			typeof search.month === "string" && isValidMonth(search.month)
-				? search.month
-				: currentMonth(DEFAULT_TIME_ZONE);
-		const account =
-			typeof search.account === "string" && search.account.trim().length > 0
-				? search.account.trim()
-				: undefined;
-		return { month, account };
-	},
-	loaderDeps: ({ search }) => ({
-		month: search.month,
-		account: search.account,
+	validateSearch: (search: Record<string, unknown>) => ({
+		month: readMonth(search),
 	}),
+	loaderDeps: ({ search }) => ({ month: search.month }),
 	loader: ({ context, deps }) =>
-		context.queryClient.ensureQueryData(monthQuery(deps.month, deps.account)),
-	component: MonthPage,
+		Promise.all([
+			context.queryClient.ensureQueryData(monthQuery(deps.month)),
+			context.queryClient.ensureQueryData(accountsQuery()),
+			context.queryClient.ensureQueryData(trendQuery(deps.month)),
+		]),
+	head: () => ({ meta: [{ title: "Overview · Budget" }] }),
+	component: OverviewPage,
 });
 
-function MonthPage() {
-	const { month, account } = Route.useSearch();
-	const { data, isFetching, isError, error } = useQuery({
-		...monthQuery(month, account),
+function OverviewPage() {
+	const { month } = Route.useSearch();
+	const monthState = useQuery({
+		...monthQuery(month),
 		placeholderData: keepPreviousData,
 	});
-	const today = civilDateInTimeZone(new Date(), DEFAULT_TIME_ZONE);
-	const rows = data ? activityRows(data) : [];
+	const accountsState = useQuery(accountsQuery());
+	const currency = pickCurrency(monthState.data?.summaries);
+	const trendState = useQuery(trendQuery(month, currency));
+	const summary = monthState.data?.summaries.find(
+		(item) => item.currency === currency,
+	);
+	const worth = accountsState.data?.netWorth.find(
+		(item) => item.currency === currency,
+	);
+	const recent = monthState.data
+		? buildActivity(monthState.data).slice(0, 6)
+		: [];
+	const activeAccounts =
+		accountsState.data?.accounts.filter(
+			(account) => !account.archived && account.currency === currency,
+		) ?? [];
 
 	return (
-		<main className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-6">
-			<div className="flex flex-wrap items-center justify-between gap-3">
+		<main className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 md:px-6">
+			<div className="flex flex-wrap items-end justify-between gap-3">
 				<div>
-					<p className="text-muted-foreground text-sm">Asia/Yangon</p>
-					<h1 className="font-semibold text-3xl tracking-tight">
-						{formatMonthLabel(month)}
+					<p className="text-muted-foreground text-sm">
+						Asia/Yangon · {currency}
+					</p>
+					<h1 className="font-semibold text-2xl tracking-tight md:text-3xl">
+						Overview
 					</h1>
 				</div>
-				<nav aria-label="Choose month" className="flex gap-2">
-					<Link
-						to="/"
-						search={{ month: shiftMonth(month, -1), account }}
-						className="rounded-md border px-3 py-2 text-sm"
-					>
-						Previous month
-					</Link>
-					<Link
-						to="/"
-						search={{ month: shiftMonth(month, 1), account }}
-						className="rounded-md border px-3 py-2 text-sm"
-					>
-						Next month
-					</Link>
-				</nav>
+				{monthState.isFetching || accountsState.isFetching ? (
+					<p role="status" className="text-muted-foreground text-sm">
+						Updating {formatMonthLabel(month)}
+					</p>
+				) : null}
 			</div>
 
-			{isFetching ? (
-				<p role="status" className="text-muted-foreground text-sm">
-					Updating {formatMonthLabel(month)}
-				</p>
+			{monthState.isError ? (
+				<p role="alert">{monthState.error.message}</p>
 			) : null}
 
-			{isError ? <p role="alert">{error.message}</p> : null}
+			<section
+				aria-label="Summary"
+				className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"
+			>
+				<Stat
+					label="Income"
+					value={formatAmount(summary?.incomeMinor ?? 0, currency)}
+					hint={formatMonthLabel(month)}
+					tone="income"
+				/>
+				<Stat
+					label="Expenses"
+					value={formatAmount(summary?.expenseMinor ?? 0, currency)}
+					hint={formatMonthLabel(month)}
+					tone="expense"
+				/>
+				<Stat
+					label="Net"
+					value={formatAmount(summary?.netMinor ?? 0, currency)}
+					hint="Income minus expenses"
+				/>
+				<Stat
+					label="Net worth"
+					value={formatAmount(worth?.netMinor ?? 0, currency)}
+					hint="Available minus card debt"
+				/>
+				<Stat
+					label="Card debt"
+					value={formatAmount(worth?.debtMinor ?? 0, currency)}
+					hint="Not counted as available"
+					tone="expense"
+				/>
+			</section>
 
-			{data ? (
-				<>
-					<nav aria-label="Filter by account" className="flex flex-wrap gap-2">
-						<AccountFilter
-							month={month}
-							label="All accounts"
-							current={account}
+			<section className="grid gap-4 lg:grid-cols-2">
+				<article className="rounded-xl border bg-card p-4 shadow-sm">
+					<h2 className="font-medium">Spending by category</h2>
+					<div className="mt-4">
+						<SpendingChart
+							currency={currency}
+							categories={summary?.spendingByCategory ?? []}
 						/>
-						{data.accounts.map((item) => (
-							<AccountFilter
-								key={item.id}
-								month={month}
-								accountId={item.id}
-								label={item.archived ? `${item.name} (archived)` : item.name}
-								current={account}
-							/>
-						))}
-					</nav>
+					</div>
+				</article>
+				<article className="rounded-xl border bg-card p-4 shadow-sm">
+					<h2 className="font-medium">Income and expenses</h2>
+					<p className="text-muted-foreground text-sm">
+						Last six months. Transfers are excluded.
+					</p>
+					<div className="mt-4">
+						<TrendChart currency={currency} points={trendState.data ?? []} />
+					</div>
+				</article>
+			</section>
 
-					<section aria-labelledby="totals-heading" className="grid gap-3">
-						<h2 id="totals-heading" className="font-medium text-lg">
-							Totals
-						</h2>
-						{data.transfers.length > 0 ? (
-							<p className="text-muted-foreground text-sm">
-								Transfers between accounts are not included in these totals.
-							</p>
-						) : null}
-						<div className="grid gap-3 sm:grid-cols-3">
-							{data.summaries.map((summary) => (
-								<div key={summary.currency} className="contents">
-									<Total
-										label="Income"
-										value={formatAmount(summary.incomeMinor, summary.currency)}
-									/>
-									<Total
-										label="Expenses"
-										value={formatAmount(summary.expenseMinor, summary.currency)}
-									/>
-									<Total
-										label="Net"
-										value={formatAmount(summary.netMinor, summary.currency)}
-									/>
-								</div>
-							))}
-						</div>
-					</section>
-
-					<section aria-labelledby="spending-heading" className="grid gap-3">
-						<h2 id="spending-heading" className="font-medium text-lg">
-							Spending by category
-						</h2>
-						{data.summaries.every(
-							(summary) => summary.spendingByCategory.length === 0,
-						) ? (
-							<p className="text-muted-foreground">No spending this month.</p>
-						) : (
-							<ul className="divide-y rounded-lg border">
-								{data.summaries.flatMap((summary) =>
-									summary.spendingByCategory.map((category) => (
-										<li
-											key={`${summary.currency}-${category.categoryId}`}
-											className="flex items-center justify-between gap-4 px-4 py-3"
-										>
-											<span>{category.name}</span>
-											<span className="tabular-nums">
-												{formatAmount(category.totalMinor, summary.currency)}
+			<section className="grid gap-4 lg:grid-cols-5">
+				<article className="rounded-xl border bg-card p-4 shadow-sm lg:col-span-2">
+					<div className="flex items-center justify-between gap-2">
+						<h2 className="font-medium">Accounts</h2>
+						<Link
+							to="/accounts"
+							search={{ month }}
+							className="text-sm underline"
+						>
+							View all
+						</Link>
+					</div>
+					{activeAccounts.length === 0 ? (
+						<p className="mt-4 text-muted-foreground text-sm">
+							No accounts yet.
+						</p>
+					) : (
+						<ul className="mt-3 divide-y">
+							{activeAccounts.map((account) => (
+								<li
+									key={account.id}
+									className="flex items-center justify-between gap-3 py-3"
+								>
+									<span className="flex min-w-0 items-center gap-3">
+										<span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted">
+											<AccountIcon type={account.type} />
+										</span>
+										<span className="min-w-0">
+											<span className="block truncate font-medium">
+												{account.name}
 											</span>
-										</li>
-									)),
-								)}
-							</ul>
-						)}
-					</section>
-
-					<section aria-labelledby="add-heading" className="grid gap-3">
-						<h2 id="add-heading" className="font-medium text-lg">
-							Add a transaction
-						</h2>
-						<TransactionForm
-							key={`${month}-${account ?? "all"}`}
-							today={civilDateInMonth(today, month) ? today : data.start}
-							accounts={data.accounts}
-							categories={data.categories}
-							accountId={account}
-						/>
-					</section>
-
-					<section aria-labelledby="transfer-heading" className="grid gap-3">
-						<h2 id="transfer-heading" className="font-medium text-lg">
-							Add a transfer
-						</h2>
-						<TransferForm
-							key={`transfer-${month}`}
-							today={civilDateInMonth(today, month) ? today : data.start}
-							accounts={data.accounts}
-						/>
-					</section>
-
-					<section
-						aria-labelledby="transactions-heading"
-						className="grid gap-3"
-					>
-						<h2 id="transactions-heading" className="font-medium text-lg">
-							Transactions
-						</h2>
-						{rows.length === 0 ? (
-							<p className="text-muted-foreground">
-								No transactions this month.
-							</p>
-						) : (
-							<div className="overflow-x-auto rounded-lg border">
-								<table className="w-full text-sm">
-									<caption className="sr-only">
-										Transactions in {formatMonthLabel(month)}
-									</caption>
-									<thead className="border-b text-left">
-										<tr>
-											<th scope="col" className="px-3 py-2 font-medium">
-												Date
-											</th>
-											<th scope="col" className="px-3 py-2 font-medium">
-												Payee
-											</th>
-											<th scope="col" className="px-3 py-2 font-medium">
-												Account
-											</th>
-											<th scope="col" className="px-3 py-2 font-medium">
-												Category
-											</th>
-											<th scope="col" className="px-3 py-2 font-medium">
-												Type
-											</th>
-											<th
-												scope="col"
-												className="px-3 py-2 text-right font-medium"
-											>
-												Amount
-											</th>
-										</tr>
-									</thead>
-									<tbody>
-										{rows.map((row) => (
-											<tr key={row.id} className="border-b last:border-0">
-												<td className="whitespace-nowrap px-3 py-2">
-													{row.occurredOn}
-												</td>
-												<td className="px-3 py-2">{row.title}</td>
-												<td className="px-3 py-2">{row.account}</td>
-												<td className="px-3 py-2">{row.category}</td>
-												<td className="px-3 py-2">
-													{row.kind}
-													{row.refund ? (
-														<span className="sr-only"> refund</span>
-													) : null}
-												</td>
-												<td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
-													{formatAmount(row.amountMinor, row.currency)}
-												</td>
-											</tr>
-										))}
-									</tbody>
-								</table>
-							</div>
-						)}
-					</section>
-				</>
-			) : null}
+											<span className="block text-muted-foreground text-xs">
+												{ACCOUNT_TYPE_LABELS[account.type]} · {account.currency}
+											</span>
+										</span>
+									</span>
+									<span
+										className={`shrink-0 tabular-nums ${account.displayKind === "owed" ? "text-rose-700 dark:text-rose-400" : ""}`}
+									>
+										{account.displayKind === "owed"
+											? `Owed ${formatAmount(account.displayMinor, account.currency)}`
+											: account.displayKind === "credit"
+												? `Credit ${formatAmount(account.displayMinor, account.currency)}`
+												: formatAmount(account.displayMinor, account.currency)}
+									</span>
+								</li>
+							))}
+						</ul>
+					)}
+				</article>
+				<article className="rounded-xl border bg-card p-4 shadow-sm lg:col-span-3">
+					<div className="mb-4 flex items-center justify-between gap-2">
+						<h2 className="font-medium">Recent activity</h2>
+						<Link
+							to="/transactions"
+							search={{
+								month,
+								account: undefined,
+								category: undefined,
+								type: "all",
+							}}
+							className="text-sm underline"
+						>
+							View month
+						</Link>
+					</div>
+					<ActivityList
+						items={recent}
+						empty={`No transactions in ${formatMonthLabel(month)}.`}
+					/>
+				</article>
+			</section>
 		</main>
 	);
 }
 
-function Total({ label, value }: { label: string; value: string }) {
-	return (
-		<div className="rounded-lg border p-4">
-			<p className="text-muted-foreground text-sm">{label}</p>
-			<p className="mt-1 font-semibold text-2xl tabular-nums">{value}</p>
-		</div>
-	);
-}
-
-function AccountFilter({
-	month,
-	accountId,
+function Stat({
 	label,
-	current,
+	value,
+	hint,
+	tone = "neutral",
 }: {
-	month: string;
-	accountId?: string;
 	label: string;
-	current?: string;
+	value: string;
+	hint: string;
+	tone?: "income" | "expense" | "neutral";
 }) {
-	const selected = (current ?? undefined) === accountId;
 	return (
-		<Link
-			to="/"
-			search={{ month, account: accountId }}
-			aria-current={selected ? "page" : undefined}
-			className={`rounded-md border px-3 py-1.5 text-sm ${selected ? "font-semibold" : ""}`}
-		>
-			{label}
-		</Link>
+		<article className="rounded-xl border bg-card p-4 shadow-sm">
+			<h2 className="text-muted-foreground text-sm">{label}</h2>
+			<p
+				className={`mt-2 font-semibold text-2xl tabular-nums tracking-tight ${tone === "income" ? "text-emerald-700 dark:text-emerald-400" : ""} ${tone === "expense" ? "text-rose-700 dark:text-rose-400" : ""}`}
+			>
+				{value}
+			</p>
+			<p className="mt-1 text-muted-foreground text-xs">{hint}</p>
+		</article>
 	);
 }
 
-function activityRows(data: {
-	transactions: Array<{
-		id: string;
-		occurredOn: string;
-		createdAt: string;
-		payee: string;
-		direction: string;
-		amountMinor: number;
-		categoryName: string;
-		accountName: string;
-		currency: string;
-	}>;
-	transfers: Array<{
-		id: string;
-		occurredOn: string;
-		createdAt: string;
-		memo: string;
-		amountMinor: number;
-		currency: string;
-		fromAccountName: string;
-		toAccountName: string;
-	}>;
-}) {
-	return [
-		...data.transactions.map((transaction) => ({
-			id: transaction.id,
-			occurredOn: transaction.occurredOn,
-			createdAt: transaction.createdAt,
-			title: transaction.payee,
-			account: transaction.accountName,
-			category: transaction.categoryName,
-			kind: transaction.direction === "income" ? "Income" : "Expense",
-			amountMinor: transaction.amountMinor,
-			currency: transaction.currency,
-			refund: transaction.amountMinor < 0,
-		})),
-		...data.transfers.map((transfer) => ({
-			id: transfer.id,
-			occurredOn: transfer.occurredOn,
-			createdAt: transfer.createdAt,
-			title: transfer.memo,
-			account: `${transfer.fromAccountName} to ${transfer.toAccountName}`,
-			category: "Transfer",
-			kind: "Transfer",
-			amountMinor: transfer.amountMinor,
-			currency: transfer.currency,
-			refund: false,
-		})),
-	].sort(
-		(left, right) =>
-			right.occurredOn.localeCompare(left.occurredOn) ||
-			right.createdAt.localeCompare(left.createdAt),
-	);
+function pickCurrency(
+	summaries: Array<{ currency: string }> | undefined,
+): typeof DEFAULT_CURRENCY {
+	const found = summaries?.find((item) => item.currency === DEFAULT_CURRENCY);
+	const currency =
+		found?.currency ?? summaries?.[0]?.currency ?? DEFAULT_CURRENCY;
+	return isCurrencyCode(currency) ? currency : DEFAULT_CURRENCY;
 }

@@ -20,6 +20,7 @@ export function TransactionForm({
 	accounts,
 	categories,
 	accountId,
+	onSaved,
 }: {
 	today: string;
 	accounts: Array<{
@@ -31,6 +32,7 @@ export function TransactionForm({
 	}>;
 	categories: Array<{ id: string; name: string; direction: Direction }>;
 	accountId?: string;
+	onSaved?: () => void;
 }) {
 	const queryClient = useQueryClient();
 	const [formError, setFormError] = useState<string | null>(null);
@@ -66,6 +68,8 @@ export function TransactionForm({
 			form.setFieldValue("payee", "");
 			await queryClient.invalidateQueries({ queryKey: ["month"] });
 			await queryClient.invalidateQueries({ queryKey: ["accounts"] });
+			await queryClient.invalidateQueries({ queryKey: ["trend"] });
+			onSaved?.();
 		},
 	});
 

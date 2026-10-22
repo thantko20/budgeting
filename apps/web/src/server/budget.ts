@@ -4,6 +4,7 @@ import {
 	createTransferSchema,
 	monthQuerySchema,
 	setAccountArchivedSchema,
+	trendQuerySchema,
 	updateAccountSchema,
 } from "@budgeting/ledger";
 import { createServerFn } from "@tanstack/react-start";
@@ -14,6 +15,14 @@ export const getMonth = createServerFn({ method: "GET" })
 		const { getDb, getMonthSnapshot } = await import("@budgeting/ledger/db");
 		const db = await getDb();
 		return getMonthSnapshot(db, data.month, data.accountId);
+	});
+
+export const getTrend = createServerFn({ method: "GET" })
+	.validator(trendQuerySchema)
+	.handler(async ({ data }) => {
+		const { getDb, getMonthlyTrend } = await import("@budgeting/ledger/db");
+		const db = await getDb();
+		return getMonthlyTrend(db, data.month, data.currency ?? "MMK");
 	});
 
 export const getAccounts = createServerFn({ method: "GET" }).handler(

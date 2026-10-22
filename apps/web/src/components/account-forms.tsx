@@ -26,7 +26,7 @@ import {
 const selectClass = "h-9 rounded-md border bg-transparent px-3 text-sm";
 const currencies = CURRENCY_CODES;
 
-export function CreateAccountForm() {
+export function CreateAccountForm({ onSaved }: { onSaved?: () => void }) {
 	const queryClient = useQueryClient();
 	const [formError, setFormError] = useState<string | null>(null);
 	const defaultCurrency: CurrencyCode = DEFAULT_CURRENCY;
@@ -50,6 +50,8 @@ export function CreateAccountForm() {
 			form.reset();
 			await queryClient.invalidateQueries({ queryKey: ["accounts"] });
 			await queryClient.invalidateQueries({ queryKey: ["month"] });
+			await queryClient.invalidateQueries({ queryKey: ["trend"] });
+			onSaved?.();
 		},
 	});
 
@@ -192,7 +194,9 @@ export function CreateAccountForm() {
 
 export function AccountEditor({
 	account,
+	onSaved,
 }: {
+	onSaved?: () => void;
 	account: {
 		id: string;
 		name: string;
@@ -227,6 +231,8 @@ export function AccountEditor({
 			}
 			await queryClient.invalidateQueries({ queryKey: ["accounts"] });
 			await queryClient.invalidateQueries({ queryKey: ["month"] });
+			await queryClient.invalidateQueries({ queryKey: ["trend"] });
+			onSaved?.();
 		},
 	});
 
@@ -348,6 +354,8 @@ export function AccountEditor({
 							}
 							await queryClient.invalidateQueries({ queryKey: ["accounts"] });
 							await queryClient.invalidateQueries({ queryKey: ["month"] });
+							await queryClient.invalidateQueries({ queryKey: ["trend"] });
+							onSaved?.();
 						})
 						.finally(() => {
 							setPending(false);

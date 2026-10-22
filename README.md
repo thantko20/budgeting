@@ -20,7 +20,7 @@ bun install
 bun dev
 ```
 
-Open http://localhost:3001. The first launch creates `apps/web/data` and seeds a Cash account (MMK) plus a few categories. Add wallets, banks, and cards from Accounts.
+Open http://localhost:3001. The first launch creates `apps/web/data` and seeds a Cash account (MMK) plus a few categories. The overview is a dashboard; transactions, accounts, and categories are in the sidebar.
 
 Other checks:
 

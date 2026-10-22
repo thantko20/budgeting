@@ -56,7 +56,10 @@ export {
 	monthQuerySchema,
 	monthSchema,
 	setAccountArchivedSchema,
+	trendQuerySchema,
 	updateAccountSchema,
 } from "./schema";
 export type { CategorySpending, CurrencySummary, SummaryRow } from "./summary";
 export { summarizeByCurrency } from "./summary";
+export type { TrendPoint, TrendRow } from "./trend";
+export { monthlyTrend } from "./trend";

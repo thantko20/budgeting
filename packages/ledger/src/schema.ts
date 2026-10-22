@@ -50,6 +50,11 @@ export const monthQuerySchema = z.object({
 	accountId: z.string().trim().min(1).optional(),
 });
 
+export const trendQuerySchema = z.object({
+	month: monthSchema,
+	currency: currencyCodeSchema.optional(),
+});
+
 export type MonthQuery = z.infer<typeof monthQuerySchema>;
 
 export const createAccountSchema = z.object({

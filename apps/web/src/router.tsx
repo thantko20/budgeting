@@ -53,13 +53,10 @@ function NotFound() {
 			<p className="mt-4">
 				<Link
 					to="/"
-					search={{
-						month: currentMonth(DEFAULT_TIME_ZONE),
-						account: undefined,
-					}}
+					search={{ month: currentMonth(DEFAULT_TIME_ZONE) }}
 					className="underline"
 				>
-					Back to this month
+					Back to overview
 				</Link>
 			</p>
 		</main>
