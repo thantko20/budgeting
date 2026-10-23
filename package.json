@@ -1,31 +1,36 @@
 {
 	"name": "budgeting",
 	"private": true,
+	"engines": {
+		"node": ">=24 <25"
+	},
 	"workspaces": [
 		"apps/*",
 		"packages/*"
 	],
 	"scripts": {
-		"check": "biome check --write .",
+		"check": "biome check .",
+		"check:fix": "biome check --write .",
 		"prepare": "husky",
-		"dev": "turbo dev",
-		"build": "turbo build",
-		"check-types": "turbo check-types",
-		"dev:native": "turbo -F native dev",
-		"dev:web": "turbo -F web dev",
-		"dev:server": "turbo -F server dev"
+		"dev": "turbo dev --filter=!docs",
+		"build": "turbo build --filter=!docs",
+		"check-types": "turbo check-types --filter=!docs",
+		"test": "turbo test --filter=!docs",
+		"dev:web": "turbo dev --filter=web"
 	},
-	"dependencies": {},
 	"devDependencies": {
-		"turbo": "^2.5.4",
-		"@biomejs/biome": "^2.0.0",
+		"@biomejs/biome": "^2.5.0",
 		"husky": "^9.1.7",
-		"lint-staged": "^15.5.0"
+		"lint-staged": "^16.2.0",
+		"turbo": "^2.11.0"
 	},
 	"lint-staged": {
 		"*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}": [
-			"biome check --write ."
+			"biome check --write --no-errors-on-unmatched"
 		]
 	},
-	"packageManager": "bun@1.2.18"
+	"packageManager": "bun@1.2.18",
+	"overrides": {
+		"h3": "1.15.11"
+	}
 }

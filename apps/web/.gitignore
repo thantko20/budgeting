@@ -50,3 +50,6 @@ next-env.d.ts
 
 # Other
 dev-dist
+
+# Local PGlite database
+/data
